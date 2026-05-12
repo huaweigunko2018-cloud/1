@@ -12,7 +12,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # --- [ НАЛАШТУВАННЯ ] ---
-TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
+TOKEN = "8696056110:AAE8N4RFkfDimXrDXZXBkyEX8O3KKFzL2f4"
 DATABASE_URL = "postgresql://ivan:P9QgCYmcpNfsMik1CqmaMIRepXcFnaJb@dpg-d81ra8bbc2fs73fvpuk0-a/clan_db_xlqx" # Internal URL з Render
 ADMIN_IDS = [1364079697]
 
