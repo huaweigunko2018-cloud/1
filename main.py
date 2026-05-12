@@ -9,9 +9,9 @@ from sqlalchemy import create_engine, Column, BigInteger, String, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# --- НАСТРОЙКИ ---
+
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-DATABASE_URL = "postgresql://ivan:U5d2ww0d2jtzaeVbNhR7ESHIeAXwm7Bp@dpg-d81orj6gvqtc73ddqf5g-a/clan_db_0pel" # Твой Internal Database URL с Render
+DATABASE_URL = "postgresql://ivan:U5d2ww0d2jtzaeVbNhR7ESHIeAXwm7Bp@dpg-d81orj6gvqtc73ddqf5g-a/clan_db_0pel" 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -82,7 +82,7 @@ async def start_edit(c: types.CallbackQuery, state: FSMContext):
         "real_name": "Введите ваше реальное имя:",
         "game_nick": "Введите ваш игровой ник:",
         "crit_value": "Введите ваш процент критического урона (число):",
-        "main_pawn": "Введите вашу основную пешку и её уровень (напр. Танцор 13):",
+        "main_pawn": "Введите вашу основную пешку и её уровень (напр. Танцовщица 13):",
         "others": "Введите список остальных пешек с уровнями (каждая с новой строки):"
     }
     
