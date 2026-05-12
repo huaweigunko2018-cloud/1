@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
-from sqlalchemy import create_all, create_engine, Column, BigInteger, String, Integer
+from sqlalchemy import create_engine, Column, BigInteger, String, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # --- НАЛАШТУВАННЯ ---
@@ -23,7 +23,7 @@ Base = declarative_base()
 # --- МОДЕЛЬ ДАНИХ ---
 class Player(Base):
     __tablename__ = "players"
-    user_id = Column(BigInteger, PRIMARY KEY=True)
+    user_id = Column(BigInteger, primary_key=True)
     username = Column(String)
     main_pawn = Column(String)
     level = Column(Integer)
