@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 # --- НАЛАШТУВАННЯ ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
 # Сюди встав посилання від Supabase
-DATABASE_URL = "postgresql://postgres:TWbDpVjt9XF0QdnT@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require"
+DATABASE_URL = "postgresql://postgres.awnhftewsauhbwaaymku:TWbDpVjt9XF0QdnT@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
