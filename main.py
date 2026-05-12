@@ -10,7 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # --- НАСТРОЙКИ --
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
 
-MONGO_URL = "mongodb+srv://huaweigunko2018_db_user:vWU5mlA39t9uOtgS@cluster0.hwj6vqs.mongodb.net/?appName=Cluster0"
+MONGO_URL = "mongodb+srv://botuser:oqLSiCu1OI8nGpJI@cluster0.hwj6vqs.mongodb.net/?appName=Cluster0"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
