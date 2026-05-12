@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 
 # --- [ НАЛАШТУВАННЯ ] ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-DATABASE_URL = "postgresql://ivan:00xl9YUA8mPCeI99aQb7HUsNnbZFj9iy@dpg-d81qa777f7vs73ed0l60-a/clan_db_swys" # Internal URL з Render
+DATABASE_URL = "postgresql://ivan:Go8qQ9tHmkKXOJldunU1ES9oSoAPwdgm@dpg-d81r8frbc2fs73fvoo70-a/clan_db_dxh4" # Internal URL з Render
 ADMIN_IDS = [1364079697]# Впиши ID обох адмінів
 
 # --- [ ВЕБ-СЕРВЕР ДЛЯ RENDER (ЩОБ НЕ СПАВ) ] ---
