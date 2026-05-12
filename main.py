@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, Column, BigInteger, String, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
 DATABASE_URL = "postgresql://ivan:2iPAjL60A8Wg8XZEcnh4aoVccF7oHDEb@dpg-d81pf5favr4c73bdbrug-a/clan_db_jhgl" 
 
@@ -24,8 +25,8 @@ class Player(Base):
     real_name = Column(String)
     game_nick = Column(String)
     crit_value = Column(Integer)
-    is_legendary = Column(String)
-    main_info = Column(String) # Мейн пешка + рівень
+    legendary_val = Column(Integer) # Легендарность теперь число
+    main_info = Column(String)
     others = Column(Text)
 
 Base.metadata.create_all(engine)
@@ -41,86 +42,115 @@ class Reg(StatesGroup):
 class Edit(StatesGroup):
     target = State()
 
-# --- КЛАВІАТУРИ ---
+# --- КЛАВИАТУРЫ ---
 def main_kb():
     b = ReplyKeyboardBuilder()
     b.button(text="👤 Мой профиль"), b.button(text="👥 Список клана")
     b.button(text="⚙️ Настройки профиля")
     return b.adjust(2, 1).as_markup(resize_keyboard=True)
 
-def leg_kb():
+def edit_inline_kb():
     kb = InlineKeyboardBuilder()
-    kb.button(text="Да ✅", callback_data="reg_leg_Да")
-    kb.button(text="Нет ❌", callback_data="reg_leg_Нет")
-    return kb.as_markup()
+    kb.button(text="Имя", callback_data="edit_real_name")
+    kb.button(text="Ник", callback_data="edit_game_nick")
+    kb.button(text="Крит", callback_data="edit_crit_value")
+    kb.button(text="Легендарность", callback_data="edit_legendary_val")
+    kb.button(text="Мейн", callback_data="edit_main_info")
+    kb.button(text="Другие пешки", callback_data="edit_others")
+    return kb.adjust(2).as_markup()
 
-# --- ЛОГІКА РЕЄСТРАЦІЇ ПРИ /START ---
+# --- РЕГИСТРАЦИЯ ---
 
 @dp.message(Command("start"))
 async def cmd_start(m: types.Message, state: FSMContext):
     session = Session()
     p = session.query(Player).get(m.from_user.id)
     session.close()
-
     if p:
-        await m.answer(f"С возвращением, {p.real_name}! Твой профиль готов.", reply_markup=main_kb())
+        await m.answer(f"Привет, {p.real_name}! Твой профиль активен.", reply_markup=main_kb())
     else:
-        await m.answer("Привет! Ты новый участник. Давай заполним анкету клана.\n\nКак тебя зовут (реальное имя)?")
+        await m.answer("Добро пожаловать! Давай создадим твой профиль.\n\nКак тебя зовут (реальное имя)?")
         await state.set_state(Reg.real_name)
 
 @dp.message(Reg.real_name)
 async def reg_name(m: types.Message, state: FSMContext):
     await state.update_data(rn=m.text)
-    await m.answer("Твой игровой ник в Rush Royale:")
+    await m.answer("Твой игровой ник:")
     await state.set_state(Reg.game_nick)
 
 @dp.message(Reg.game_nick)
 async def reg_nick(m: types.Message, state: FSMContext):
     await state.update_data(gn=m.text)
-    await m.answer("Твой процент критического урона (только число):")
+    await m.answer("Твой процент крита (число):")
     await state.set_state(Reg.crit)
 
 @dp.message(Reg.crit)
 async def reg_crit(m: types.Message, state: FSMContext):
     if not m.text.isdigit(): return await m.answer("Введи число!")
     await state.update_data(cr=int(m.text))
-    await m.answer("Твоя основная пешка и её уровень (напр. Танцор 13):")
+    await m.answer("Твое значение легендарности (число):")
+    await state.set_state(Reg.legendary)
+
+@dp.message(Reg.legendary)
+async def reg_leg(m: types.Message, state: FSMContext):
+    if not m.text.isdigit(): return await m.answer("Введи число!")
+    await state.update_data(leg=int(m.text))
+    await m.answer("Твоя основная пешка и ёё уровень:")
     await state.set_state(Reg.main_pawn)
 
 @dp.message(Reg.main_pawn)
 async def reg_main(m: types.Message, state: FSMContext):
     await state.update_data(mp=m.text)
-    await m.answer("У тебя есть легендарный статус?", reply_markup=leg_kb())
-    await state.set_state(Reg.legendary)
-
-@dp.callback_query(Reg.legendary, F.data.startswith("reg_leg_"))
-async def reg_leg(c: types.CallbackQuery, state: FSMContext):
-    val = c.data.replace("reg_leg_", "")
-    await state.update_data(leg=val)
-    await c.message.answer("Напиши список остальных пешек и их уровни (одним сообщением):")
+    await m.answer("Список остальных пешек и уровни(писать списком через запятую):")
     await state.set_state(Reg.others)
-    await c.answer()
 
 @dp.message(Reg.others)
 async def reg_final(m: types.Message, state: FSMContext):
     d = await state.get_data()
     session = Session()
-    new_p = Player(
-        user_id=m.from_user.id,
-        real_name=d['rn'],
-        game_nick=d['gn'],
-        crit_value=d['cr'],
-        main_info=d['mp'],
-        is_legendary=d['leg'],
-        others=m.text
-    )
+    new_p = Player(user_id=m.from_user.id, real_name=d['rn'], game_nick=d['gn'], 
+                    crit_value=d['cr'], legendary_val=d['leg'], main_info=d['mp'], others=m.text)
     session.merge(new_p)
     session.commit()
     session.close()
-    await m.answer("🎉 Регистрация завершена! Теперь ты в базе клана.", reply_markup=main_kb())
+    await m.answer("✅ Регистрация завершена!", reply_markup=main_kb())
     await state.clear()
 
-# --- ІНШІ ФУНКЦІЇ (ПРОФІЛЬ ТА СПИСОК) ---
+# --- НАСТРОЙКИ И РЕДАКТИРОВАНИЕ ---
+
+@dp.message(F.text == "⚙️ Настройки профиля")
+async def show_edit_menu(m: types.Message):
+    await m.answer("Что именно ты хочешь изменить?", reply_markup=edit_inline_kb())
+
+@dp.callback_query(F.data.startswith("edit_"))
+async def start_edit(c: types.CallbackQuery, state: FSMContext):
+    field = c.data.replace("edit_", "")
+    await state.update_data(f=field)
+    await c.message.answer(f"Введите новое значение для этого поля:")
+    await state.set_state(Edit.target)
+    await c.answer()
+
+@dp.message(Edit.target)
+async def save_edit(m: types.Message, state: FSMContext):
+    d = await state.get_data()
+    field = d['f']
+    session = Session()
+    p = session.query(Player).get(m.from_user.id)
+    
+    try:
+        if field in ['crit_value', 'legendary_val']:
+            setattr(p, field, int(m.text))
+        else:
+            setattr(p, field, m.text)
+        session.commit()
+        await m.answer("✅ Данные обновлены!", reply_markup=main_kb())
+    except:
+        await m.answer("Ошибка! Возможно, вы ввели текст там, где нужно число.")
+    finally:
+        session.close()
+        await state.clear()
+
+# --- ПРОСМОТР ---
 
 @dp.message(F.text == "👤 Мой профиль")
 async def profile(m: types.Message):
@@ -129,12 +159,10 @@ async def profile(m: types.Message):
     session.close()
     if p:
         txt = (f"👤 **{p.real_name}** (`{p.game_nick}`)\n"
-               f"🔥 Крит: {p.crit_value}% | ⭐ Лега: {p.is_legendary}\n"
+               f"🔥 Крит: {p.crit_value}% | 💎 Легендарность: {p.legendary_val}\n"
                f"⚔️ Мейн: {p.main_info}\n\n"
                f"📜 **Другие пешки:**\n{p.others}")
         await m.answer(txt, parse_mode="Markdown")
-    else:
-        await m.answer("Напиши /start для регистрации.")
 
 @dp.message(F.text == "👥 Список клана")
 async def clan_list(m: types.Message):
@@ -145,7 +173,7 @@ async def clan_list(m: types.Message):
     kb = InlineKeyboardBuilder()
     for p in players:
         kb.button(text=f"{p.game_nick} ({p.crit_value}%)", callback_data=f"view_{p.user_id}")
-    await m.answer("Участники клана:", reply_markup=kb.adjust(1).as_markup())
+    await m.answer("Участники:", reply_markup=kb.adjust(1).as_markup())
 
 @dp.callback_query(F.data.startswith("view_"))
 async def view_p(c: types.CallbackQuery):
@@ -154,9 +182,9 @@ async def view_p(c: types.CallbackQuery):
     p = session.query(Player).get(uid)
     session.close()
     if p:
-        txt = (f"👤 **{p.real_name}** (@{p.game_nick})\n🔥 Крит: {p.crit_value}% | ⭐ Лега: {p.is_legendary}\n"
-               f"⚔️ Мейн: {p.main_info}\n\n📜 **Все пешки:**\n{p.others}")
-        await c.message.answer(txt)
+        txt = (f"👤 **{p.real_name}**\n🎮 Ник: `{p.game_nick}`\n🔥 Крит: {p.crit_value}%\n"
+               f"💎 Легендарность: {p.legendary_val}\n⚔️ Мейн: {p.main_info}\n\n📜 **Пешки:**\n{p.others}")
+        await c.message.answer(txt, parse_mode="Markdown")
     await c.answer()
 
 async def main():
