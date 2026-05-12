@@ -23,7 +23,7 @@ def run_dummy_server():
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write(b"Бот працює!")
+            self.wfile.write(b"Bot is running!")
     
     server_address = ('', 8080)
     httpd = http.server.HTTPServer(server_address, HealthCheckHandler)
