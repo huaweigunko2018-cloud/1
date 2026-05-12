@@ -8,6 +8,19 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from sqlalchemy import create_engine, Column, BigInteger, String, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from aiohttp import web
+import threading
+
+async def handle(request):
+    return web.Response(text="Бот живий!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
 
 # --- [НАЛАШТУВАННЯ] ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
@@ -226,3 +239,16 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+async def main():
+    # Додаємо запуск веб-сервера як окреме завдання
+    asyncio.create_task(start_web_server())
+    
+    # Запускаємо самого бота
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Бот вимкнений")
