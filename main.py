@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, Column, BigInteger, String, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# --- НАСТРОЙКИ ---
+# --- НАСТРОЙКИ --
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
 # ВСТАВ СЮДИ Internal Database URL від Render
 DATABASE_URL = "postgresql://ivan:U5d2ww0d2jtzaeVbNhR7ESHIeAXwm7Bp@dpg-d81orj6gvqtc73ddqf5g-a/clan_db_0pel" 
