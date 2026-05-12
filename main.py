@@ -5,120 +5,103 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
-from motor.motor_asyncio import AsyncIOMotorClient
+from sqlalchemy import create_engine, Column, BigInteger, String, Integer, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# --- НАСТРОЙКИ --
+# --- НАСТРОЙКИ ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-
-MONGO_URL = "mongodb+srv://botuser:oqLSiCu1OI8nGpJI@cluster0.hwj6vqs.mongodb.net/?retryWrites=true&w=majority"
+# ВСТАВ СЮДИ Internal Database URL від Render
+DATABASE_URL = "postgresql://ivan:U5d2ww0d2jtzaeVbNhR7ESHIeAXwm7Bp@dpg-d81orj6gvqtc73ddqf5g-a/clan_db_0pel" 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-client = AsyncIOMotorClient(MONGO_URL)
-db = client['clan_database']
-collection = db['players']
+engine = create_engine(DATABASE_URL)
+Base = declarative_base()
+Session = sessionmaker(bind=engine)
+
+class Player(Base):
+    __tablename__ = 'players'
+    user_id = Column(BigInteger, primary_key=True)
+    username = Column(String)
+    main_pawn = Column(String)
+    level = Column(Integer)
+    others = Column(Text)
+
+Base.metadata.create_all(engine)
 
 # --- КЛАВИАТУРЫ ---
 def main_kb():
     b = ReplyKeyboardBuilder()
-    b.button(text="👤 Мой профиль")
-    b.button(text="📝 Изменить данные")
-    b.button(text="👥 Список клана")
+    b.button(text="👤 Мой профиль"), b.button(text="📝 Изменить данные"), b.button(text="👥 Список клана")
     return b.adjust(2).as_markup(resize_keyboard=True)
 
 class Reg(StatesGroup):
-    pawn = State()
-    lvl = State()
-    oth = State()
+    pawn, lvl, oth = State(), State(), State()
 
 # --- ОБРАБОТЧИКИ ---
-
 @dp.message(Command("start"))
 @dp.message(F.text == "📝 Изменить данные")
 async def start(m: types.Message, state: FSMContext):
-    await m.answer("Привет! Давай заполним твой профиль для клана.\nКакая твоя **основная пешка**?", reply_markup=types.ReplyKeyboardRemove())
+    await m.answer("Привет! Какая твоя **основная пешка**?", reply_markup=types.ReplyKeyboardRemove())
     await state.set_state(Reg.pawn)
 
 @dp.message(Reg.pawn)
 async def p_pawn(m: types.Message, state: FSMContext):
     await state.update_data(p=m.text)
-    await m.answer("Какой уровень у этой пешки? (число от 7 до 15):")
+    await m.answer("Какой уровень у этой пешки? (7-15):")
     await state.set_state(Reg.lvl)
 
 @dp.message(Reg.lvl)
 async def p_lvl(m: types.Message, state: FSMContext):
     if not m.text.isdigit() or not (7 <= int(m.text) <= 15):
-        return await m.answer("Нужно ввести число от 7 до 15! Попробуй еще раз:")
+        return await m.answer("Введи число от 7 до 15!")
     await state.update_data(l=int(m.text))
-    await m.answer("Напиши список своих остальных пешек и их уровни (одним сообщением):")
+    await m.answer("Напиши список остальных пешек:")
     await state.set_state(Reg.oth)
 
 @dp.message(Reg.oth)
 async def p_oth(m: types.Message, state: FSMContext):
     d = await state.get_data()
-    user_id = m.from_user.id
-    username = m.from_user.username or f"id{user_id}"
-    
-    user_data = {
-        "_id": user_id,
-        "username": username,
-        "main_pawn": d['p'],
-        "level": d['l'],
-        "others": m.text
-    }
-    
-    # Сохраняем в MongoDB (обновляем если есть, или создаем новый)
-    await collection.replace_one({"_id": user_id}, user_data, upsert=True)
-    
-    await m.answer("✅ Данные успешно сохранены в базу клана!", reply_markup=main_kb())
+    session = Session()
+    player = Player(user_id=m.from_user.id, username=m.from_user.username or f"id{m.from_user.id}", 
+                    main_pawn=d['p'], level=d['l'], others=m.text)
+    session.merge(player)
+    session.commit()
+    session.close()
+    await m.answer("✅ Данные сохранены навсегда!", reply_markup=main_kb())
     await state.clear()
 
 @dp.message(F.text == "👤 Мой профиль")
 async def profile(m: types.Message):
-    res = await collection.find_one({"_id": m.from_user.id})
-    if res:
-        text = (f"👤 **Твой профиль:**\n\n"
-                f"⚔️ Мейн: {res['main_pawn']}\n"
-                f"📈 Уровень: {res['level']}\n"
-                f"📜 Остальные пешки:\n{res['others']}")
-        await m.answer(text, parse_mode="Markdown")
+    session = Session()
+    p = session.query(Player).filter_by(user_id=m.from_user.id).first()
+    session.close()
+    if p:
+        await m.answer(f"👤 **Профиль:**\n⚔️ Мейн: {p.main_pawn}\n📈 Ур: {p.level}\n📜 Прочее: {p.others}", parse_mode="Markdown")
     else:
-        await m.answer("Профиль не найден. Нажми '📝 Изменить данные'")
+        await m.answer("Нажми 'Изменить данные'")
 
 @dp.message(F.text == "👥 Список клана")
 async def c_list(m: types.Message):
-    cursor = collection.find()
-    players = await cursor.to_list(length=100)
-    
-    if not players:
-        return await m.answer("В базе клана пока никого нет.")
-    
+    session = Session()
+    players = session.query(Player).all()
+    session.close()
+    if not players: return await m.answer("Клан пуст")
     kb = InlineKeyboardBuilder()
     for p in players:
-        # Кнопка: Имя (Мейн пешка)
-        kb.button(text=f"👤 @{p['username']} ({p['main_pawn']})", callback_data=f"view_{p['_id']}")
-    
-    kb.adjust(1)
-    await m.answer("Выберите участника для просмотра деталей:", reply_markup=kb.as_markup())
+        kb.button(text=f"👤 @{p.username} ({p.main_pawn})", callback_data=f"view_{p.user_id}")
+    await m.answer("Выберите игрока:", reply_markup=kb.adjust(1).as_markup())
 
 @dp.callback_query(F.data.startswith("view_"))
-async def view_player(call: types.CallbackQuery):
-    target_id = int(call.data.split("_")[1])
-    res = await collection.find_one({"_id": target_id})
-    
-    if res:
-        text = (f"👤 **Игрок:** @{res['username']}\n"
-                f"⚔️ **Мейн пешка:** {res['main_pawn']}\n"
-                f"📈 **Уровень:** {res['level']}\n\n"
-                f"📜 **Все пешки:**\n{res['others']}")
-        await call.message.answer(text, parse_mode="Markdown")
-        await call.answer()
-    else:
-        await call.answer("Данные игрока не найдены", show_alert=True)
+async def view(c: types.CallbackQuery):
+    uid = int(c.data.split("_")[1])
+    session = Session()
+    p = session.query(Player).filter_by(user_id=uid).first()
+    session.close()
+    if p:
+        await c.message.answer(f"👤 @{p.username}\n⚔️ Мейн: {p.main_pawn}\n📈 Ур: {p.level}\n📜 Все пешки:\n{p.others}", parse_mode="Markdown")
+    await c.answer()
 
-async def main():
-    # В MongoDB таблицы (коллекции) создаются автоматически при первой вставке
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+async def main(): await dp.start_polling(bot)
+if __name__ == "__main__": asyncio.run(main())
