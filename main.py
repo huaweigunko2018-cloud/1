@@ -1,25 +1,21 @@
 import asyncio
-import sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # --- НАЛАШТУВАННЯ ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
+MONGO_URL = "mongodb+srv://huaweigunko2018_db_user:<db_password>@cluster0.hwj6vqs.mongodb.net/?appName=Cluster0"
+
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-
-# --- БАЗА ДАНИХ (SQLite) ---
-def init_db():
-    conn = sqlite3.connect("clan.db")
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS players 
-                      (user_id INTEGER PRIMARY KEY, username TEXT, main_pawn TEXT, level INTEGER, others TEXT)''')
-    conn.commit()
-    conn.close()
+client = AsyncIOMotorClient(MONGO_URL)
+db = client['clan_database']
+collection = db['players']
 
 # --- КНОПКИ ---
 def main_kb():
@@ -56,36 +52,35 @@ async def p_lvl(m: types.Message, state: FSMContext):
 @dp.message(Reg.oth)
 async def p_oth(m: types.Message, state: FSMContext):
     d = await state.get_data()
-    conn = sqlite3.connect("clan.db")
-    cur = conn.cursor()
-    cur.execute("INSERT OR REPLACE INTO players VALUES (?, ?, ?, ?, ?)", 
-                (m.from_user.id, m.from_user.username, d['p'], d['l'], m.text))
-    conn.commit()
-    conn.close()
-    await m.answer("✅ Збережено!", reply_markup=main_kb())
+    user_data = {
+        "_id": m.from_user.id,
+        "username": m.from_user.username or f"id{m.from_user.id}",
+        "main_pawn": d['p'],
+        "level": d['l'],
+        "others": m.text
+    }
+    # Оновлюємо або вставляємо дані
+    await collection.replace_one({"_id": m.from_user.id}, user_data, upsert=True)
+    await m.answer("✅ Дані збережено в хмару навсегда!", reply_markup=main_kb())
     await state.clear()
 
 @dp.message(F.text == "👤 Мій профіль")
 async def profile(m: types.Message):
-    conn = sqlite3.connect("clan.db")
-    res = conn.execute("SELECT * FROM players WHERE user_id=?", (m.from_user.id,)).fetchone()
-    conn.close()
+    res = await collection.find_one({"_id": m.from_user.id})
     if res:
-        await m.answer(f"👤 Мейн: {res[2]}\n📈 Рівень: {res[3]}\n📜 Інше: {res[4]}")
+        await m.answer(f"👤 Мейн: {res['main_pawn']}\n📈 Рівень: {res['level']}\n📜 Інше: {res['others']}")
     else:
-        await m.answer("Натисни 'Змінити дані'")
+        await m.answer("Дані не знайдені. Натисни '📝 Змінити дані'")
 
 @dp.message(F.text == "👥 Список клану")
 async def c_list(m: types.Message):
-    conn = sqlite3.connect("clan.db")
-    players = conn.execute("SELECT username, main_pawn, level FROM players").fetchall()
-    conn.close()
+    cursor = collection.find()
+    players = await cursor.to_list(length=100)
     if not players: return await m.answer("Клан порожній")
-    txt = "📊 Склад:\n" + "\n".join([f"• @{p[0]}: {p[1]} ({p[2]} ур.)" for p in players])
+    txt = "📊 Склад клану:\n" + "\n".join([f"• @{p['username']}: {p['main_pawn']} ({p['level']} ур.)" for p in players])
     await m.answer(txt)
 
 async def main():
-    init_db()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
