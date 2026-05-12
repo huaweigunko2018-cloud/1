@@ -1,116 +1,91 @@
 import asyncio
-import os
+import sqlite3
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
-from sqlalchemy import create_engine, Column, BigInteger, String, Integer
-from sqlalchemy.orm import sessionmaker, declarative_base
 
 # --- НАЛАШТУВАННЯ ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-# Сюди встав посилання від Supabase
-DATABASE_URL = "postgresql+pg8000://postgres:TWbDpVjt9XF0QdnT@db.awnhftewsauhbwaaymku.supabase.co:5432/postgres?sslmode=verify-full"
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
 
-# --- МОДЕЛЬ ДАНИХ ---
-class Player(Base):
-    __tablename__ = "players"
-    user_id = Column(BigInteger, primary_key=True)
-    username = Column(String)
-    main_pawn = Column(String)
-    level = Column(Integer)
-    other_pawns = Column(String)
-
-Base.metadata.create_all(engine)
+# --- БАЗА ДАНИХ (SQLite) ---
+def init_db():
+    conn = sqlite3.connect("clan.db")
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS players 
+                      (user_id INTEGER PRIMARY KEY, username TEXT, main_pawn TEXT, level INTEGER, others TEXT)''')
+    conn.commit()
+    conn.close()
 
 # --- КНОПКИ ---
-def main_menu():
-    builder = ReplyKeyboardBuilder()
-    builder.button(text="👤 Мій профіль")
-    builder.button(text="📝 Змінити дані")
-    builder.button(text="👥 Список клану")
-    builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True)
+def main_kb():
+    b = ReplyKeyboardBuilder()
+    b.button(text="👤 Мій профіль"), b.button(text="📝 Змінити дані"), b.button(text="👥 Список клану")
+    return b.adjust(2).as_markup(resize_keyboard=True)
 
-class Registration(StatesGroup):
-    waiting_for_main_pawn = State()
-    waiting_for_level = State()
-    waiting_for_others = State()
+class Reg(StatesGroup):
+    pawn = State()
+    lvl = State()
+    oth = State()
 
-# --- ЛОГІКА ---
-
+# --- ОБРОБНИКИ ---
 @dp.message(Command("start"))
 @dp.message(F.text == "📝 Змінити дані")
-async def start_reg(message: types.Message, state: FSMContext):
-    await message.answer("Яка твоя **основна пешка**?", reply_markup=types.ReplyKeyboardRemove())
-    await state.set_state(Registration.waiting_for_main_pawn)
+async def start(m: types.Message, state: FSMContext):
+    await m.answer("Яка твоя основна пешка?", reply_markup=types.ReplyKeyboardRemove())
+    await state.set_state(Reg.pawn)
 
-@dp.message(Registration.waiting_for_main_pawn)
-async def proc_pawn(message: types.Message, state: FSMContext):
-    await state.update_data(pawn=message.text)
-    await message.answer("Рівень (від 7 до 15):")
-    await state.set_state(Registration.waiting_for_level)
+@dp.message(Reg.pawn)
+async def p_pawn(m: types.Message, state: FSMContext):
+    await state.update_data(p=m.text)
+    await m.answer("Рівень (7-15):")
+    await state.set_state(Reg.lvl)
 
-@dp.message(Registration.waiting_for_level)
-async def proc_level(message: types.Message, state: FSMContext):
-    if not message.text.isdigit() or not (7 <= int(message.text) <= 15):
-        return await message.answer("Введи число від 7 до 15!")
-    await state.update_data(level=int(message.text))
-    await message.answer("Напиши інші свої пешки одним повідомленням:")
-    await state.set_state(Registration.waiting_for_others)
+@dp.message(Reg.lvl)
+async def p_lvl(m: types.Message, state: FSMContext):
+    if not m.text.isdigit() or not (7 <= int(m.text) <= 15):
+        return await m.answer("Введи число від 7 до 15!")
+    await state.update_data(l=int(m.text))
+    await m.answer("Напиши інші пешки:")
+    await state.set_state(Reg.oth)
 
-@dp.message(Registration.waiting_for_others)
-async def proc_final(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    db = SessionLocal()
-    player = db.query(Player).filter(Player.user_id == message.from_user.id).first()
-    
-    if not player:
-        player = Player(user_id=message.from_user.id)
-    
-    player.username = message.from_user.username or f"id{message.from_user.id}"
-    player.main_pawn = data['pawn']
-    player.level = data['level']
-    player.other_pawns = message.text
-    
-    db.add(player)
-    db.commit()
-    db.close()
-    
-    await message.answer("✅ Дані збережено!", reply_markup=main_menu())
+@dp.message(Reg.oth)
+async def p_oth(m: types.Message, state: FSMContext):
+    d = await state.get_data()
+    conn = sqlite3.connect("clan.db")
+    cur = conn.cursor()
+    cur.execute("INSERT OR REPLACE INTO players VALUES (?, ?, ?, ?, ?)", 
+                (m.from_user.id, m.from_user.username, d['p'], d['l'], m.text))
+    conn.commit()
+    conn.close()
+    await m.answer("✅ Збережено!", reply_markup=main_kb())
     await state.clear()
 
 @dp.message(F.text == "👤 Мій профіль")
-async def my_profile(message: types.Message):
-    db = SessionLocal()
-    p = db.query(Player).filter(Player.user_id == message.from_user.id).first()
-    db.close()
-    if p:
-        await message.answer(f"👤 Твій мейн: {p.main_pawn}\n📈 Рівень: {p.level}\n📜 Інше: {p.other_pawns}", parse_mode="Markdown")
+async def profile(m: types.Message):
+    conn = sqlite3.connect("clan.db")
+    res = conn.execute("SELECT * FROM players WHERE user_id=?", (m.from_user.id,)).fetchone()
+    conn.close()
+    if res:
+        await m.answer(f"👤 Мейн: {res[2]}\n📈 Рівень: {res[3]}\n📜 Інше: {res[4]}")
     else:
-        await message.answer("Заповни дані через кнопку 'Змінити дані'.")
+        await m.answer("Натисни 'Змінити дані'")
 
 @dp.message(F.text == "👥 Список клану")
-async def clan_list(message: types.Message):
-    db = SessionLocal()
-    all_p = db.query(Player).all()
-    db.close()
-    if not all_p: return await message.answer("Клан порожній.")
-    
-    res = "📊 **Клан:**\n"
-    for p in all_p:
-        res += f"• @{p.username}: {p.main_pawn} ({p.level} ур.)\n"
-    await message.answer(res, parse_mode="Markdown")
+async def c_list(m: types.Message):
+    conn = sqlite3.connect("clan.db")
+    players = conn.execute("SELECT username, main_pawn, level FROM players").fetchall()
+    conn.close()
+    if not players: return await m.answer("Клан порожній")
+    txt = "📊 Склад:\n" + "\n".join([f"• @{p[0]}: {p[1]} ({p[2]} ур.)" for p in players])
+    await m.answer(txt)
 
 async def main():
+    init_db()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
