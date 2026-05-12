@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-DATABASE_URL = "postgresql://ivan:2iPAjL60A8Wg8XZEcnh4aoVccF7oHDEb@dpg-d81pf5favr4c73bdbrug-a/clan_db_jhgl" 
+DATABASE_URL = "postgresql://ivan:rloI9ngcFx82CEcV2daiOcCBmXsH6AB7@dpg-d81pm0rtqb8s738miehg-a/clan_db_i80p" 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
