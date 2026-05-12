@@ -10,7 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-DATABASE_URL = "postgresql://ivan:U5d2ww0d2jtzaeVbNhR7ESHIeAXwm7Bp@dpg-d81orj6gvqtc73ddqf5g-a/clan_db_0pel" 
+DATABASE_URL = "postgresql://ivan:2iPAjL60A8Wg8XZEcnh4aoVccF7oHDEb@dpg-d81pf5favr4c73bdbrug-a/clan_db_jhgl" 
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
