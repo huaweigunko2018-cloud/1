@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 # --- [НАЛАШТУВАННЯ] ---
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
-DATABASE_URL = "postgresql://ivan:rloI9ngcFx82CEcV2daiOcCBmXsH6AB7@dpg-d81pm0rtqb8s738miehg-a/clan_db_i80p" # Internal URL з Render
+DATABASE_URL = "postgresql://ivan:00xl9YUA8mPCeI99aQb7HUsNnbZFj9iy@dpg-d81qa777f7vs73ed0l60-a/clan_db_swys" # Internal URL з Render
 ADMIN_IDS = [1364079697] # Твій ID та ID помічника
 
 bot = Bot(token=TOKEN)
@@ -178,16 +178,21 @@ async def clan_list(m: types.Message):
 async def view_p(c: types.CallbackQuery):
     uid = int(c.data.split("_")[1])
     session = Session()
-    p = session.query(Player).get(uid)
-    session.close()
-    if p:
-        txt = (f"👤 **{p.real_name}**\n🎮 Ник: `{p.game_nick}`\n🔥 Крит: {p.crit_value}%\n"
-               f"💎 Легендарность: {p.legendary_val}\n⚔️ Мейн: {p.main_info}\n\n📜 **Пешки:**\n{p.others}")
-        kb = InlineKeyboardBuilder()
-        if c.from_user.id in ADMIN_IDS:
-            kb.button(text="❌ Удалить из клана", callback_data=f"confirm_del_{uid}")
-        await c.message.answer(txt, parse_mode="Markdown", reply_markup=kb.as_markup())
-    await c.answer()
+    try:
+        p = session.query(Player).get(uid)
+        if p:
+            txt = (f"👤 **{p.real_name}**\n🎮 Нік: `{p.game_nick}`\n🔥 Крит: {p.crit_value}%\n"
+                   f"💎 Легендарність: {p.legendary_val}\n⚔️ Мейн: {p.main_info}\n\n📜 **Пешки:**\n{p.others}")
+            kb = InlineKeyboardBuilder()
+            if c.from_user.id in ADMIN_IDS:
+                kb.button(text="❌ Удалить из клана", callback_data=f"confirm_del_{uid}")
+            await c.message.answer(txt, parse_mode="Markdown", reply_markup=kb.as_markup())
+    except Exception as e:
+        print(f"Помилка бази: {e}")
+        await c.message.answer("Виникла помилка при читанні бази.")
+    finally:
+        session.close() # Це ГАРАНТУЄ, що бот не зависне наступного разу
+        await c.answer()
 
 @dp.callback_query(F.data.startswith("confirm_del_"))
 async def confirm_delete(c: types.CallbackQuery):
