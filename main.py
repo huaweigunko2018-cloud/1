@@ -9,7 +9,6 @@ from sqlalchemy import create_engine, Column, BigInteger, String, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-
 TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
 DATABASE_URL = "postgresql://ivan:U5d2ww0d2jtzaeVbNhR7ESHIeAXwm7Bp@dpg-d81orj6gvqtc73ddqf5g-a/clan_db_0pel" 
 
@@ -19,133 +18,134 @@ engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 
-# --- МОДЕЛЬ ДАННЫХ ---
 class Player(Base):
     __tablename__ = 'players'
     user_id = Column(BigInteger, primary_key=True)
-    real_name = Column(String)     # Имя человека
-    game_nick = Column(String)     # Игровой ник
-    crit_value = Column(Integer)   # Значение крита
-    is_legendary = Column(String)  # Легендарность
-    main_pawn = Column(String)
-    main_lvl = Column(Integer)
-    others = Column(Text)          # Другие пешки с уровнями
+    real_name = Column(String)
+    game_nick = Column(String)
+    crit_value = Column(Integer)
+    is_legendary = Column(String)
+    main_info = Column(String) # Мейн пешка + рівень
+    others = Column(Text)
 
 Base.metadata.create_all(engine)
 
-# --- СОСТОЯНИЯ (FSM) ---
 class Reg(StatesGroup):
     real_name = State()
     game_nick = State()
     crit = State()
     legendary = State()
     main_pawn = State()
-    main_lvl = State()
     others = State()
 
 class Edit(StatesGroup):
     target = State()
 
-# --- КЛАВИАТУРЫ ---
+# --- КЛАВІАТУРИ ---
 def main_kb():
     b = ReplyKeyboardBuilder()
     b.button(text="👤 Мой профиль"), b.button(text="👥 Список клана")
     b.button(text="⚙️ Настройки профиля")
     return b.adjust(2, 1).as_markup(resize_keyboard=True)
 
-def edit_kb():
+def leg_kb():
     kb = InlineKeyboardBuilder()
-    kb.button(text="Имя", callback_data="edit_real_name")
-    kb.button(text="Ник", callback_data="edit_game_nick")
-    kb.button(text="Крит", callback_data="edit_crit_value")
-    kb.button(text="Мейн пешка", callback_data="edit_main_pawn")
-    kb.button(text="Другие пешки", callback_data="edit_others")
-    return kb.adjust(2).as_markup()
+    kb.button(text="Да ✅", callback_data="reg_leg_Да")
+    kb.button(text="Нет ❌", callback_data="reg_leg_Нет")
+    return kb.as_markup()
 
-# --- ОБРАБОТЧИКИ ---
+# --- ЛОГІКА РЕЄСТРАЦІЇ ПРИ /START ---
 
 @dp.message(Command("start"))
-async def cmd_start(m: types.Message):
-    await m.answer("Добро пожаловать в бот клана! Заполни свой профиль, чтобы участвовать в рейдах.", reply_markup=main_kb())
-
-@dp.message(F.text == "⚙️ Настройки профиля")
-async def settings(m: types.Message):
-    await m.answer("Что ты хочешь изменить?", reply_markup=edit_kb())
-
-# --- ПРОЦЕСС РЕДАКТИРОВАНИЯ (УНИВЕРСАЛЬНЫЙ) ---
-@dp.callback_query(F.data.startswith("edit_"))
-async def start_edit(c: types.CallbackQuery, state: FSMContext):
-    field = c.data.replace("edit_", "")
-    await state.update_data(field=field)
-    
-    prompts = {
-        "real_name": "Введите ваше реальное имя:",
-        "game_nick": "Введите ваш игровой ник:",
-        "crit_value": "Введите ваш процент критического урона (число):",
-        "main_pawn": "Введите вашу основную пешку и её уровень (напр. Танцовщица 13):",
-        "others": "Введите список остальных пешек с уровнями (каждая с новой строки):"
-    }
-    
-    await c.message.answer(prompts.get(field, "Введите новое значение:"))
-    await state.set_state(Edit.target)
-    await c.answer()
-
-@dp.message(Edit.target)
-async def save_edit(m: types.Message, state: FSMContext):
-    data = await state.get_data()
-    field = data['field']
-    val = m.text
-    
-    session = Session()
-    player = session.query(Player).get(m.from_user.id)
-    
-    if not player:
-        player = Player(user_id=m.from_user.id)
-        session.add(player)
-    
-    if field == "crit_value":
-        if not val.isdigit(): return await m.answer("Введите число!")
-        player.crit_value = int(val)
-    elif field == "real_name": player.real_name = val
-    elif field == "game_nick": player.game_nick = val
-    elif field == "main_pawn": player.main_pawn = val
-    elif field == "others": player.others = val
-    
-    session.commit()
-    session.close()
-    await m.answer(f"✅ Поле {field} успешно обновлено!", reply_markup=main_kb())
-    await state.clear()
-
-# --- ПРОСМОТР ---
-@dp.message(F.text == "👤 Мой профиль")
-async def my_profile(m: types.Message):
+async def cmd_start(m: types.Message, state: FSMContext):
     session = Session()
     p = session.query(Player).get(m.from_user.id)
     session.close()
-    
-    if not p:
-        return await m.answer("Профиль пуст. Нажми 'Настройки профиля', чтобы заполнить.")
-    
-    text = (f"👤 **Профиль: {p.real_name or 'Не указано'}**\n"
-            f"🎮 Ник: `{p.game_nick or 'Не указано'}`\n"
-            f"🔥 Крит: {p.crit_value or 0}%\n"
-            f"⚔️ Мейн: {p.main_pawn or 'Не указано'}\n\n"
-            f"📜 **Все пешки:**\n{p.others or 'Пусто'}")
-    await m.answer(text, parse_mode="Markdown")
+
+    if p:
+        await m.answer(f"С возвращением, {p.real_name}! Твой профиль готов.", reply_markup=main_kb())
+    else:
+        await m.answer("Привет! Ты новый участник. Давай заполним анкету клана.\n\nКак тебя зовут (реальное имя)?")
+        await state.set_state(Reg.real_name)
+
+@dp.message(Reg.real_name)
+async def reg_name(m: types.Message, state: FSMContext):
+    await state.update_data(rn=m.text)
+    await m.answer("Твой игровой ник в Rush Royale:")
+    await state.set_state(Reg.game_nick)
+
+@dp.message(Reg.game_nick)
+async def reg_nick(m: types.Message, state: FSMContext):
+    await state.update_data(gn=m.text)
+    await m.answer("Твой процент критического урона (только число):")
+    await state.set_state(Reg.crit)
+
+@dp.message(Reg.crit)
+async def reg_crit(m: types.Message, state: FSMContext):
+    if not m.text.isdigit(): return await m.answer("Введи число!")
+    await state.update_data(cr=int(m.text))
+    await m.answer("Твоя основная пешка и её уровень (напр. Танцор 13):")
+    await state.set_state(Reg.main_pawn)
+
+@dp.message(Reg.main_pawn)
+async def reg_main(m: types.Message, state: FSMContext):
+    await state.update_data(mp=m.text)
+    await m.answer("У тебя есть легендарный статус?", reply_markup=leg_kb())
+    await state.set_state(Reg.legendary)
+
+@dp.callback_query(Reg.legendary, F.data.startswith("reg_leg_"))
+async def reg_leg(c: types.CallbackQuery, state: FSMContext):
+    val = c.data.replace("reg_leg_", "")
+    await state.update_data(leg=val)
+    await c.message.answer("Напиши список остальных пешек и их уровни (одним сообщением):")
+    await state.set_state(Reg.others)
+    await c.answer()
+
+@dp.message(Reg.others)
+async def reg_final(m: types.Message, state: FSMContext):
+    d = await state.get_data()
+    session = Session()
+    new_p = Player(
+        user_id=m.from_user.id,
+        real_name=d['rn'],
+        game_nick=d['gn'],
+        crit_value=d['cr'],
+        main_info=d['mp'],
+        is_legendary=d['leg'],
+        others=m.text
+    )
+    session.merge(new_p)
+    session.commit()
+    session.close()
+    await m.answer("🎉 Регистрация завершена! Теперь ты в базе клана.", reply_markup=main_kb())
+    await state.clear()
+
+# --- ІНШІ ФУНКЦІЇ (ПРОФІЛЬ ТА СПИСОК) ---
+
+@dp.message(F.text == "👤 Мой профиль")
+async def profile(m: types.Message):
+    session = Session()
+    p = session.query(Player).get(m.from_user.id)
+    session.close()
+    if p:
+        txt = (f"👤 **{p.real_name}** (`{p.game_nick}`)\n"
+               f"🔥 Крит: {p.crit_value}% | ⭐ Лега: {p.is_legendary}\n"
+               f"⚔️ Мейн: {p.main_info}\n\n"
+               f"📜 **Другие пешки:**\n{p.others}")
+        await m.answer(txt, parse_mode="Markdown")
+    else:
+        await m.answer("Напиши /start для регистрации.")
 
 @dp.message(F.text == "👥 Список клана")
 async def clan_list(m: types.Message):
     session = Session()
     players = session.query(Player).all()
     session.close()
-    
     if not players: return await m.answer("Клан пуст.")
-    
     kb = InlineKeyboardBuilder()
     for p in players:
-        kb.button(text=f"{p.game_nick or p.user_id} ({p.crit_value or 0}%)", callback_data=f"view_{p.user_id}")
-    
-    await m.answer("Список участников:", reply_markup=kb.adjust(1).as_markup())
+        kb.button(text=f"{p.game_nick} ({p.crit_value}%)", callback_data=f"view_{p.user_id}")
+    await m.answer("Участники клана:", reply_markup=kb.adjust(1).as_markup())
 
 @dp.callback_query(F.data.startswith("view_"))
 async def view_p(c: types.CallbackQuery):
@@ -153,11 +153,10 @@ async def view_p(c: types.CallbackQuery):
     session = Session()
     p = session.query(Player).get(uid)
     session.close()
-    
     if p:
-        text = (f"👤 **Игрок: {p.real_name}**\n🎮 Ник: `{p.game_nick}`\n🔥 Крит: {p.crit_value}%\n"
-                f"⚔️ Мейн: {p.main_pawn}\n\n📜 **Все пешки:**\n{p.others}")
-        await c.message.answer(text, parse_mode="Markdown")
+        txt = (f"👤 **{p.real_name}** (@{p.game_nick})\n🔥 Крит: {p.crit_value}% | ⭐ Лега: {p.is_legendary}\n"
+               f"⚔️ Мейн: {p.main_info}\n\n📜 **Все пешки:**\n{p.others}")
+        await c.message.answer(txt)
     await c.answer()
 
 async def main():
