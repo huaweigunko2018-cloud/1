@@ -10,9 +10,9 @@ from sqlalchemy import create_all, create_engine, Column, BigInteger, String, In
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # --- НАЛАШТУВАННЯ ---
-TOKEN = "ТВІЙ_ТОКЕН_ТУТ"
+TOKEN = "8578499281:AAFm-Y-gnDsaShsC-t0yk_ArFhF_k2jZly4"
 # Сюди встав посилання від Supabase
-DATABASE_URL = "ТВОЄ_ПОСИЛАННЯ_ВІД_SUPABASE"
+DATABASE_URL = "https://supabase.com/dashboard/project/awnhftewsauhbwaaymku"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
